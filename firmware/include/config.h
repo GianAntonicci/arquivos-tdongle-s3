@@ -45,7 +45,8 @@
 #define HID_ENUM_DELAY_MS     2000  // espera após enumerar antes de digitar
 #define HID_KEY_DELAY_MS      12    // intervalo entre teclas
 #define HID_DIALOG_DELAY_MS   700   // espera a caixa Executar / Spotlight abrir
-#define HID_APP_OPEN_DELAY_MS 2500  // macOS: espera o Chrome abrir antes de Cmd+L
+#define HID_SPOTLIGHT_SEARCH_MS 1200 // macOS: espera o Spotlight mostrar o resultado antes do Enter
+#define HID_APP_OPEN_DELAY_MS 2500  // macOS: espera o Chrome abrir antes de Cmd+T
 
 // ---------- Pinos (confirmados em github.com/Xinyuan-LilyGO/T-Dongle-S3) ----------
 #define PIN_LCD_MOSI 3

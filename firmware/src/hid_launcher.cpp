@@ -100,7 +100,10 @@ static void buildScript() {
             addCombo(HID_MOD_LGUI, HID_KEY_SPACE);
             addDelay(HID_DIALOG_DELAY_MS);
             addText(s_text);
-            addDelay(300);
+            // O Spotlight busca de forma assíncrona e ignora o Enter enquanto o
+            // resultado principal ainda não apareceu; com pouca espera o Enter se
+            // perde e a URL acaba digitada no próprio Spotlight
+            addDelay(HID_SPOTLIGHT_SEARCH_MS);
             addCombo(0, HID_KEY_ENTER);
             addDelay(HID_APP_OPEN_DELAY_MS);
             addCombo(HID_MOD_LGUI, hidLetter('t'));
