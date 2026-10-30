@@ -30,7 +30,8 @@ firmware/            projeto PlatformIO (rodar `pio` sempre de dentro daqui)
   src/settings.cpp   NVS (Preferences)
   src/hid_launcher.cpp  sequência de teclado que abre o Chrome (não bloqueante)
   src/keymap_abnt2.cpp  mapas caractere -> tecla HID para US e ABNT2
-  src/usb_bridge.cpp USB composta (CDC + HID); protocolo AINDA É STUB (etapa d)
+  src/usb_bridge.cpp USB composta (CDC + HID), HELLO e transferência com crédito
+  src/protocol.cpp   frames/CRC32/parser, espelho do protocolo da web
   src/web_portal.cpp AP + DNS captive + WebServer + upload em streaming
   include/web_portal_html.h  páginas do celular (envio e /config)
 web/                 projeto Vite + TypeScript strict (rodar `npm` sempre de dentro daqui)
@@ -111,10 +112,15 @@ cd web && npm run build        # tsc --noEmit + vite build -> web/dist
   convertidos para ASCII apenas na exibição (`foldAscii`).
 - **Task de UI no core 0** (display + LED + botão): a tela continua viva enquanto o
   loop principal fica bloqueado dentro do callback de upload.
-- **Upload com corpo cru** (`application/octet-stream`, `?raw=1`) em vez de multipart:
+- **Upload com corpo cru** (`application/octet-stream`) em vez de multipart:
   o parser multipart do `WebServer` lê byte a byte. O caminho `HTTPRaw` lê blocos de
-  `HTTP_RAW_BUFLEN=4096`. Multipart continua aceito (útil para `curl -F`). Nome,
-  tamanho, índice e total vão na query string (URL-encoded, UTF-8).
+  `HTTP_RAW_BUFLEN=4096`. Multipart continua aceito (útil para `curl -F`). No raw,
+  nome, tamanho, índice e total vão no cabeçalho `X-Upload-Metadata` como query
+  URL-encoded UTF-8. O core 3.3.11 não interpreta a query da URL nesse caminho.
+  `PortalWebServer::prepareRawMetadata()` interpreta o cabeçalho no RAW_START;
+  `BridgeUploadHandler` separa raw/multipart pelos callbacks tipados. Nunca
+  decidir o formato com `hasArg("raw")`: isso acessava `HTTPUpload` nulo e
+  reiniciava o ESP32. No multipart os metadados continuam na query da URL.
 - **Digitação independente de layout:** a URL é digitada sem `https://` (o `:` muda de
   tecla entre US e ABNT2) e o `/` sai pelo teclado numérico (0x54) nos dois mapas. A
   URL padrão só usa caracteres que ficam na mesma tecla nos dois layouts. O layout do
@@ -130,7 +136,11 @@ cd web && npm run build        # tsc --noEmit + vite build -> web/dist
 - **Captive portal:** o DNS responde o IP do dongle para qualquer domínio; os testes de
   conectividade são redirecionados (302) para `http://192.168.4.1/`. No core 3.x o DHCP
   só anuncia DNS se ele for passado no 5º parâmetro de `softAPConfig()`. A opção 114 do
-  DHCP (RFC 8910) também é enviada.
+  DHCP (RFC 8910) foi removida: exige uma API CAPPORT HTTPS, não a página HTML
+  HTTP deste projeto. O portal usa DNS wildcard e redirecionamentos HTTP 302,
+  inclusive rotas explícitas dos testes Android/Apple/Windows. IP/DHCP, DNS e
+  HTTP são preparados antes de aplicar o SSID do projeto; erros de inicialização
+  aparecem como aviso no display.
 
 ## Protocolo USB (fonte: `web/src/protocol.ts`)
 
@@ -177,16 +187,20 @@ Vetores para conferir a implementação C++:
 |---|---|
 | (a) display + LED + botão + menu/NVS | feita e testada no hardware |
 | (b) USB CDC + HID abrindo o Chrome | feita e testada (Linux/GNOME funcionou) |
-| (c) AP + captive portal + página do celular | código pronto; **problema aberto no hardware** (abaixo) |
-| (d) protocolo no firmware | página web pronta e publicada; firmware ainda é stub |
-| (e) polimento, README, testes | não começada |
+| (c) AP + captive portal + página do celular | acesso manual no celular confirmado pelo usuário; abertura automática a validar |
+| (d) protocolo no firmware | implementado; testes nativos e parser web; JPEG de 4,14 MB validado no hardware com firmware 0.2.2 |
+| (e) polimento, README, testes | README e testes de protocolo iniciados; testes físicos/medição pendentes |
 
 ### Problema aberto (etapa c)
 
 No Android, o celular conecta ao `TDongle-Bridge` como "conectado sem internet" e
 **nem `http://192.168.4.1` nem `http://connectivitycheck.gstatic.com/generate_204` abrem**
 ("não é possível acessar o site"). Ou seja, o celular não está falando com o dongle por
-HTTP. Já aplicado: DNS anunciado no DHCP (5º parâmetro do `softAPConfig`) e opção 114.
+HTTP. DNS anunciado no DHCP (5º parâmetro do `softAPConfig`). A revisão mais recente
+removeu o anúncio incorreto da opção 114 e a segunda parada/reinicialização do DHCP;
+também antecipou IP/DHCP e serviços em relação ao SSID, verificou erros de
+inicialização e adicionou rotas dos testes de conectividade. O usuário confirmou
+que já consegue abrir a página no celular; abertura automática ainda a validar.
 
 Próximos passos de diagnóstico:
 1. Confirmar que o firmware mais recente está gravado e que a rede foi esquecida e
@@ -196,38 +210,48 @@ Próximos passos de diagnóstico:
    a internet). Script: conectar no AP, registrar IP/rota/DNS, `dig @192.168.4.1`,
    `curl http://192.168.4.1/status`, e **sempre reconectar ao `FIAP-IOT` no final**
    (trap), já que a sessão do agente depende da internet.
-4. Suspeitas a verificar: ordem `softAP()`/`softAPConfig()` no core 3.x (o IP pode não
-   estar sendo aplicado); o efeito de parar e religar o DHCPS para a opção 114
-   (testar sem esse bloco); se o loop principal está chegando em `web_portal::loop()`.
+4. Se continuar falhando, verificar os avisos de inicialização no display e se o
+   loop principal está chegando em `web_portal::loop()`. A abertura automática
+   depende da decisão do celular; acesso manual ao IP deve funcionar primeiro.
 
 ## Mudanças futuras
 
-### Etapa (d): protocolo no firmware
-- Criar `firmware/include/protocol.h` e `firmware/src/protocol.cpp`, espelhando
-  `web/src/protocol.ts` (frames, CRC32 com `esp_rom_crc32_le`, conferindo com os vetores
-  acima, parser de RX com ressincronização).
-- Em `usb_bridge.cpp`, substituir os stubs:
-  - `loop()`: ler a CDC, tratar HELLO (responder HELLO_ACK, marcar host vivo com
-    timeout de ~3 s e o bit "pronto"), ACK, NAK e DONE;
-  - `beginFile()`: recusar se não houver host (`NoHost`) ou se estiver ocupado;
-    mandar START e esperar ACK(0) ou NAK;
-  - `writeChunk()`: fatiar em DATA ≤ 4096, respeitar a janela de crédito (proposta: 4–8),
-    ler a CDC enquanto espera, timeout → `HostGone`;
-  - `endFile()`: mandar END com o CRC32 acumulado e esperar DONE;
-  - `abortFile()`: mandar ABORT (idempotente).
-- Ajustar o TX da CDC (`setTxTimeoutMs`) e medir a vazão: o FIFO TX do TinyUSB neste
-  core é de 64 bytes (`CONFIG_TINYUSB_CDC_TX_BUFSIZE`), o que pode limitar a velocidade.
-- Implementar `debugLog()` (frame LOG) para `DEBUG_LOG=1`.
-- O HID automático passa a ser cancelado de fato quando a página já estiver aberta
-  (`hostAlive()` real).
+### Etapa (d): protocolo implementado, primeiro envio físico validado
+- `protocol.h/.cpp` espelham o v1 da web; CRC32 ROM no ESP32 e referência portátil
+  nos testes. Parser com ressincronização e limite estático de 8192 bytes.
+- `usb_bridge.cpp`: HELLO pronto válido por 3,5 s; HELLO_ACK; START/ACK(0),
+  DATA de até 4096 com janela 4, ACK cumulativo validado, NAK, END/DONE e
+  ABORT idempotente. Timeout de ACK 15 s, DONE 30 s, exigindo HELLO vivo.
+- CDC TX não bloqueante, escrita limitada ao `availableForWrite()` e a 64 bytes,
+  com `delay(1)` entre pacotes e limite por frame de 1,5 s. A versão 0.2.2 usa
+  esse envio conservador após observar um DATA de 4118 bytes truncado em 496
+  bytes no Chrome (offset 24576; próximo DATA de offset 28672 já em 3622).
+  A origem exata da perda dentro do caminho USB ainda não está comprovada.
+  Com o espaçamento, o mesmo JPEG de 4.336.521 bytes concluiu no hardware com
+  CRC/tamanho válidos, em 1min12s, média 58,9 KB/s. Firmware gravado e versão
+  confirmada pela página do PC; download concluído. Otimizar vazão só mantendo
+  essa validação; arquivos grandes e demais falhas ainda precisam de testes.
+  `debugLog()` enfileira texto e o loop emite LOG, sem texto solto na CDC.
+- Testes nativos em `firmware/test/`: vetores/ressincronização, ponte com CDC
+  simulada e decodificação dos frames C++ pelo parser TypeScript real.
+  Comandos no README. No PC é necessário clicar em Conectar e autorizar a USB;
+  pasta bloqueada precisa ser liberada. A página publicada já é compatível.
+- Medir vazão e ajustar janela/TX no hardware. O FIFO TX TinyUSB do core é de
+  64 bytes (`CONFIG_TINYUSB_CDC_TX_BUFSIZE`), o que pode limitar a velocidade.
 
-### Detecção automática de SO e layout (opção 2, combinada com o usuário)
+### Detecção automática de SO e layout
+- SO ao plugar: implementado em `host_os.cpp` e `usb_os_fingerprint.h` por
+  heurística das requisições STRING USB. `--wrap=dcd_event_handler` observa
+  SETUP/reset sem alterar o core instalado; revisar esse ponto ao atualizar o core.
+  Modo Auto é o padrão (`osmode` na NVS); escolhas manuais continuam disponíveis.
+  O roteiro é escolhido ao fim da espera de enumeração. Sem assinatura, não digita
+  e pede escolha manual. Precisa de validação física em Windows/macOS/Linux.
 - Frame novo `CONFIG` (PC→dongle): a página detecta o SO (`navigator.userAgentData.platform`)
   e o layout (`navigator.keyboard.getLayoutMap()`: tecla `Semicolon` = `ç` → ABNT2,
   `;` → US) e manda ao dongle, que grava em NVS. Os próximos plugs já usam os valores certos.
   Precisa ser adicionado em `protocol.ts`, `protocol.cpp` e no README ao mesmo tempo.
-- Fingerprint USB do SO (padrão de requisições de descritores na enumeração): avaliado e
-  **não recomendado** por ora (exige interceptar funções internas do TinyUSB, frágil).
+- O frame CONFIG ainda é uma melhoria futura para confirmação pelo navegador e
+  detecção de layout; não é requisito para a heurística USB ao conectar.
 
 ### Etapa (e): polimento e testes
 - `README.md` na raiz (português): visão geral, gravação (incluindo o modo boot),
