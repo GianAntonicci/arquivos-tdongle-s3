@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include "config.h"
+#include "display_ui.h"
+#include "host_os.h"
 #include "keymap.h"
 #include "settings.h"
 
@@ -36,6 +38,7 @@ static size_t   s_pos = 0;        // posição no texto atual
 static uint8_t  s_phase = 0;      // 0 apertar, 1 soltar, 2 espaço (tecla morta), 3 soltar espaço
 static KeyStroke s_cur;
 static volatile bool s_capsLock = false;
+static bool s_launchPending = false;
 
 static void addCombo(uint8_t mod, uint8_t key) { s_steps[s_count++] = {StepType::Combo, mod, key, 0, nullptr}; }
 static void addText(const char *t) { s_steps[s_count++] = {StepType::Text, 0, 0, 0, t}; }
@@ -76,11 +79,11 @@ static const char *typedUrl(const char *url) {
 }
 
 // Monta o roteiro conforme o SO alvo
-static void buildScript() {
+static bool buildScript() {
     const Settings &s = settings::get();
     const char *url = typedUrl(s.pcUrl);
     s_count = 0;
-    switch (s.os) {
+    switch (host_os::effective()) {
         case TargetOS::Windows:
             // Win+R -> "chrome <URL>" -> Enter
             snprintf(s_text, sizeof(s_text), "chrome %s", url);
@@ -113,7 +116,7 @@ static void buildScript() {
             break;
 
         case TargetOS::Linux:
-        default: {
+        {
             char cmd[256];
             expandUrl(cmd, sizeof(cmd), s.linuxCmd, url);
             if (s.linuxMode == 1) {
@@ -133,7 +136,10 @@ static void buildScript() {
             addCombo(0, HID_KEY_ENTER);
             break;
         }
+        default:
+            return false;
     }
+    return true;
 }
 
 static void onKbdEvent(void *, esp_event_base_t, int32_t id, void *data) {
@@ -152,7 +158,9 @@ void begin() {
 
 void requestLaunch(uint32_t delayMs) {
     if (s_state != HidState::Idle) return;
-    buildScript();
+    // Só escolhe o roteiro ao terminar a espera: as requisições STRING podem
+    // chegar depois do evento de montagem da USB.
+    s_launchPending = true;
     s_idx = 0;
     s_pos = 0;
     s_phase = 0;
@@ -165,6 +173,7 @@ void requestType(const char *text) {
     strncpy(s_text, text, sizeof(s_text) - 1);
     s_text[sizeof(s_text) - 1] = '\0';
     s_count = 0;
+    s_launchPending = false;
     addText(s_text);
     s_idx = 0;
     s_pos = 0;
@@ -176,12 +185,23 @@ void requestType(const char *text) {
 void cancel() {
     if (s_state == HidState::Running) releaseAll();
     s_state = HidState::Idle;
+    s_launchPending = false;
 }
 
 HidState state() { return s_state; }
 
 void tick(uint32_t now) {
     if (s_state == HidState::Idle || (int32_t)(now - s_nextAt) < 0) return;
+    if (s_launchPending) {
+        s_launchPending = false;
+        if (!buildScript()) {
+            s_state = HidState::Idle;
+            UiLock ui;
+            snprintf(ui->toast, sizeof(ui->toast), "Escolha o SO no menu");
+            ui->toastUntil = now + UI_TOAST_MS;
+            return;
+        }
+    }
     s_state = HidState::Running;
 
     if (s_idx >= s_count) {

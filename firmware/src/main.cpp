@@ -127,7 +127,11 @@ static void menuActivate() {
 
 // Acompanha a sequência HID: mostra "Abrindo Chrome" enquanto digita
 static void updateHid(uint32_t now) {
-    if (usb_bridge::takeMountEvent() && !s_autoLaunched) {
+    if (!usb_bridge::mounted()) {
+        s_autoLaunched = false;
+        hid::cancel();
+    }
+    if (usb_bridge::takeMountEvent() && usb_bridge::mounted() && !s_autoLaunched) {
         s_autoLaunched = true;
         // Se a página já reconectou sozinha, o Chrome já está aberto
         if (!usb_bridge::hostAlive()) hid::requestLaunch(HID_ENUM_DELAY_MS);

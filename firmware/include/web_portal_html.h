@@ -99,7 +99,8 @@ small{color:var(--mu)}#msg{color:var(--ok);min-height:1.2em;margin:0}a{color:var
 </style></head><body><main>
 <h1>Configurações</h1>
 <form id="f">
-<label>SO do computador<select name="os"><option value="0">Windows</option><option value="1">macOS</option><option value="2">Linux</option></select></label>
+<label>SO do computador<select name="os"><option value="3">Automático (USB)</option><option value="0">Windows</option><option value="1">macOS</option><option value="2">Linux</option></select>
+<small>Se a detecção não reconhecer o computador, escolha o sistema manualmente.</small></label>
 <label>Layout do teclado do computador<select name="layout"><option value="0">US</option><option value="1">ABNT2</option></select>
 <small>Só importa para comandos com símbolos como : ; ? ' "</small></label>
 <label>URL da página no PC<input name="url" maxlength="127" required></label>
