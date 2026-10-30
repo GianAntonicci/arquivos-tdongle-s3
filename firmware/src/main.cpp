@@ -1,0 +1,254 @@
+// T-Dongle Bridge — ponte Wi-Fi -> USB (nada é armazenado no dongle)
+#include <Arduino.h>
+
+#include "app_state.h"
+#include "button.h"
+#include "config.h"
+#include "display_ui.h"
+#include "led.h"
+#include "settings.h"
+
+// ---------- Estado do app ----------
+static bool     s_hostAlive = false;
+static uint32_t s_screenUntil = 0;   // telas temporárias (sucesso/erro/HID)
+static uint32_t s_menuLastInput = 0;
+static const uint32_t MENU_TIMEOUT_MS = 20000;
+
+// Troca de tela e ajusta o LED correspondente
+static void setScreen(UiScreen sc, uint32_t holdMs = 0) {
+    {
+        UiLock ui;
+        ui->screen = sc;
+        if (sc == UiScreen::Ready) {
+            ui->infoAuto = true;
+            ui->infoPage = InfoPage::WifiText;
+        }
+    }
+    s_screenUntil = holdMs ? millis() + holdMs : 0;
+    switch (sc) {
+        case UiScreen::WaitingHost: led::setPattern(LedPattern::WaitingHost); break;
+        case UiScreen::Ready:       led::setPattern(LedPattern::Ready); break;
+        case UiScreen::Transfer:    led::setPattern(LedPattern::Transfer); break;
+        case UiScreen::Success:
+            led::setPattern(LedPattern::Ready);
+            led::flashSuccess();
+            break;
+        case UiScreen::Error:       led::setPattern(LedPattern::Error); break;
+        case UiScreen::HidRunning:  led::setPattern(LedPattern::Hid); break;
+        default: break;
+    }
+}
+
+// Tela "de repouso": Pronto se o PC está conectado, senão Aguardando
+static void goIdle() { setScreen(s_hostAlive ? UiScreen::Ready : UiScreen::WaitingHost); }
+
+static UiScreen currentScreen() {
+    UiLock ui;
+    return ui->screen;
+}
+
+// ---------- Menu de configuração ----------
+static void openMenu() {
+    {
+        UiLock ui;
+        ui->screen = UiScreen::Menu;
+        ui->menuIndex = 0;
+    }
+    s_screenUntil = 0;
+    s_menuLastInput = millis();
+    button::setDoubleClickEnabled(false);
+}
+
+static void closeMenu() {
+    settings::save();
+    button::setDoubleClickEnabled(true);
+    goIdle();
+}
+
+static void menuActivate() {
+    Settings &s = settings::get();
+    uint8_t idx;
+    {
+        UiLock ui;
+        idx = ui->menuIndex;
+    }
+    switch ((MenuItem)idx) {
+        case MenuItem::Os:
+            s.os = (TargetOS)(((uint8_t)s.os + 1) % (uint8_t)TargetOS::Count);
+            break;
+        case MenuItem::Layout:
+            s.layout = (KbLayout)(((uint8_t)s.layout + 1) % (uint8_t)KbLayout::Count);
+            break;
+        case MenuItem::Led:
+            s.ledLevel = s.ledLevel % 5 + 1;
+            led::setLevel(s.ledLevel);
+            break;
+        case MenuItem::Info:
+            settings::save();
+            button::setDoubleClickEnabled(true);
+            setScreen(UiScreen::Ready);
+            {
+                UiLock ui;
+                ui->infoAuto = false;
+                ui->infoPage = InfoPage::Status;
+            }
+            return;
+        case MenuItem::Exit:
+        default:
+            closeMenu();
+            return;
+    }
+    UiLock ui;  // redesenha com o novo valor
+}
+
+// ---------- Ações do botão ----------
+static void launchChrome() {
+    // Etapa (b): sequência HID real. Por ora só a indicação visual.
+    setScreen(UiScreen::HidRunning, 1500);
+}
+
+static void nextInfoPage() {
+    if (currentScreen() != UiScreen::Ready) return;
+    UiLock ui;
+    ui->infoAuto = false;
+    ui->infoPage = (InfoPage)(((uint8_t)ui->infoPage + 1) % (uint8_t)InfoPage::Count);
+}
+
+#if UI_DEMO
+// ---------- Modo demonstração: clique curto percorre as telas ----------
+static uint8_t  s_demoStep = 0;
+static uint32_t s_demoT0 = 0;
+
+static void demoStep() {
+    uint32_t now = millis();
+    s_demoT0 = now;
+    switch (s_demoStep++ % 8) {
+        case 0:
+            s_hostAlive = false;
+            setScreen(UiScreen::WaitingHost);
+            break;
+        case 1:
+            s_hostAlive = true;
+            setScreen(UiScreen::Ready);
+            {
+                UiLock ui;
+                ui->hostAlive = true;
+                ui->stations = 1;
+                strcpy(ui->toast, "Celular conectado");
+                ui->toastUntil = now + UI_TOAST_MS;
+            }
+            break;
+        case 2: {
+            setScreen(UiScreen::Transfer);
+            UiLock ui;
+            strcpy(ui->xfer.name, "Férias em família - vídeo 4K da praia.mp4");
+            ui->xfer.total = 734003200ULL;
+            ui->xfer.done = 0;
+            ui->xfer.bytesPerSec = 0;
+            ui->xfer.index = 2;
+            ui->xfer.count = 5;
+            break;
+        }
+        case 3:
+            setScreen(UiScreen::Success);
+            break;
+        case 4: {
+            setScreen(UiScreen::Error);
+            UiLock ui;
+            ui->error = ErrorReason::WifiLost;
+            break;
+        }
+        case 5:
+            setScreen(UiScreen::HidRunning);
+            break;
+        case 6:
+            openMenu();
+            break;
+        case 7:
+            closeMenu();
+            nextInfoPage();
+            {
+                UiLock ui;
+                ui->infoPage = InfoPage::Status;
+            }
+            break;
+    }
+}
+
+static void demoTick() {
+    // Simula progresso da transferência a ~1,1 MB/s
+    static uint32_t last = 0;
+    if (millis() - last < UI_FRAME_MS || currentScreen() != UiScreen::Transfer) return;
+    last = millis();
+    uint32_t el = millis() - s_demoT0;
+    UiLock ui;
+    ui->xfer.bytesPerSec = 1150000;
+    uint64_t d = (uint64_t)el * 1150;  // bytes
+    ui->xfer.done = d > ui->xfer.total ? ui->xfer.total : d;
+}
+#endif
+
+static void handleButton(BtnEvent ev) {
+    UiScreen sc = currentScreen();
+
+    if (sc == UiScreen::Menu) {
+        s_menuLastInput = millis();
+        if (ev == BtnEvent::Short) {
+            UiLock ui;
+            ui->menuIndex = (ui->menuIndex + 1) % (uint8_t)MenuItem::Count;
+        } else if (ev == BtnEvent::Long) {
+            menuActivate();
+        }
+        return;
+    }
+
+    switch (ev) {
+        case BtnEvent::Short:
+#if UI_DEMO
+            demoStep();
+#else
+            if (sc != UiScreen::Transfer) launchChrome();
+#endif
+            break;
+        case BtnEvent::Double:
+            nextInfoPage();
+            break;
+        case BtnEvent::Long:
+            if (sc != UiScreen::Transfer) openMenu();
+            break;
+        default:
+            break;
+    }
+}
+
+// =============================================================================
+
+void setup() {
+    settings::load();
+    led::begin();
+    led::setLevel(settings::get().ledLevel);
+    button::begin();
+    display::begin();  // tela de boot + task de UI
+
+    setScreen(UiScreen::Boot, 1500);
+}
+
+void loop() {
+    uint32_t now = millis();
+
+    for (BtnEvent ev; (ev = display::nextButtonEvent()) != BtnEvent::None;) handleButton(ev);
+
+    // Telas temporárias voltam ao repouso
+    if (s_screenUntil && (int32_t)(now - s_screenUntil) >= 0) {
+        s_screenUntil = 0;
+        goIdle();
+    }
+
+    if (currentScreen() == UiScreen::Menu && now - s_menuLastInput > MENU_TIMEOUT_MS) closeMenu();
+
+#if UI_DEMO
+    demoTick();
+#endif
+
+    delay(5);
+}
