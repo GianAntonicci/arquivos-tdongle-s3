@@ -29,6 +29,10 @@
 #define USB_PRODUCT       "T-Dongle Bridge"
 
 // ---------- HID (abrir o Chrome) ----------
+// A URL é digitada sem "https://" e só com caracteres que ficam na mesma tecla
+// em US e ABNT2 (letras, números, espaço, . - _ / , < > ! @ # $ % & * ( ) = +).
+// Assim a sequência padrão funciona mesmo com o layout errado no menu; o layout
+// só importa para comandos personalizados com outros símbolos (: ; ? ' " [ ] ...).
 #define DEFAULT_TARGET_OS  0   // 0 = Windows, 1 = macOS, 2 = Linux
 #define DEFAULT_KB_LAYOUT  1   // 0 = US, 1 = ABNT2
 

@@ -49,6 +49,10 @@ static bool common(char c, KeyStroke &k) {
         case '<':  k.key = 0x36; k.mod = SHIFT; return true;
         case '.':  k.key = 0x37; return true;
         case '>':  k.key = 0x37; k.mod = SHIFT; return true;
+        // "/" pelo teclado numérico (0x54) nos dois layouts: sai "/" em qualquer
+        // layout e SO, inclusive no macOS, que nem sempre reconhece a tecla 0x87
+        // do ABNT2. É o que deixa a URL independente do layout.
+        case '/':  k.key = 0x54; return true;
         default:   return false;
     }
 }
@@ -68,7 +72,6 @@ static bool mapUS(char c, KeyStroke &k) {
         case '"':  k.key = 0x34; k.mod = SHIFT; return true;
         case '`':  k.key = 0x35; return true;
         case '~':  k.key = 0x35; k.mod = SHIFT; return true;
-        case '/':  k.key = 0x38; return true;
         case '?':  k.key = 0x38; k.mod = SHIFT; return true;
         default:   return false;
     }
@@ -86,9 +89,6 @@ static bool mapABNT2(char c, KeyStroke &k) {
         case '|':  k.key = 0x64; k.mod = SHIFT; return true;
         case ';':  k.key = 0x38; return true;
         case ':':  k.key = 0x38; k.mod = SHIFT; return true;
-        // "/" pelo teclado numérico (0x54): funciona em qualquer layout e SO,
-        // inclusive no macOS, que nem sempre reconhece a tecla 0x87 do ABNT2.
-        case '/':  k.key = 0x54; return true;
         case '?':  k.key = 0x87; k.mod = SHIFT; return true;
         // Teclas mortas: o caractere só sai depois de um Espaço
         case '~':  k.key = 0x34; k.dead = true; return true;

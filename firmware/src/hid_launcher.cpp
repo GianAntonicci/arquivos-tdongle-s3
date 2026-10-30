@@ -67,14 +67,23 @@ static void expandUrl(char *dst, size_t cap, const char *src, const char *url) {
     dst[o] = '\0';
 }
 
+// URL como será digitada: sem "https://". O ":" muda de tecla entre US e ABNT2;
+// sem ele a URL padrão só usa letras, "." "-" e "/" (teclado numérico), que saem
+// iguais em qualquer layout. O Chrome completa o esquema sozinho e o GitHub
+// Pages redireciona para HTTPS.
+static const char *typedUrl(const char *url) {
+    return strncmp(url, "https://", 8) == 0 ? url + 8 : url;
+}
+
 // Monta o roteiro conforme o SO alvo
 static void buildScript() {
     const Settings &s = settings::get();
+    const char *url = typedUrl(s.pcUrl);
     s_count = 0;
     switch (s.os) {
         case TargetOS::Windows:
             // Win+R -> "chrome <URL>" -> Enter
-            snprintf(s_text, sizeof(s_text), "chrome %s", s.pcUrl);
+            snprintf(s_text, sizeof(s_text), "chrome %s", url);
             addCombo(HID_MOD_LGUI, hidLetter('r'));
             addDelay(HID_DIALOG_DELAY_MS);
             addText(s_text);
@@ -86,7 +95,7 @@ static void buildScript() {
             // Cmd+T (aba nova, foco na barra de endereço) -> URL -> Enter.
             // Cmd+T em vez de Cmd+L para não substituir a aba que o usuário já tinha aberta.
             strncpy(s_text, "Google Chrome", sizeof(s_text));
-            strncpy(s_text2, s.pcUrl, sizeof(s_text2) - 1);
+            strncpy(s_text2, url, sizeof(s_text2) - 1);
             s_text2[sizeof(s_text2) - 1] = '\0';
             addCombo(HID_MOD_LGUI, HID_KEY_SPACE);
             addDelay(HID_DIALOG_DELAY_MS);
@@ -103,10 +112,11 @@ static void buildScript() {
         case TargetOS::Linux:
         default: {
             char cmd[256];
-            expandUrl(cmd, sizeof(cmd), s.linuxCmd, s.pcUrl);
+            expandUrl(cmd, sizeof(cmd), s.linuxCmd, url);
             if (s.linuxMode == 1) {
-                // Ctrl+Alt+T abre um terminal; o Chrome é desacoplado e o terminal fecha
-                snprintf(s_text, sizeof(s_text), "setsid -f %s >/dev/null 2>&1; exit", cmd);
+                // Ctrl+Alt+T abre um terminal; o Chrome é desacoplado e o terminal fecha.
+                // "&&" em vez de ";": o ";" muda de tecla entre US e ABNT2, o "&" não.
+                snprintf(s_text, sizeof(s_text), "setsid -f %s >/dev/null 2>&1 && exit", cmd);
                 addCombo(HID_MOD_LCTRL | HID_MOD_LALT, hidLetter('t'));
                 addDelay(1500);
             } else {
