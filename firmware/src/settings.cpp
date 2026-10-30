@@ -19,9 +19,10 @@ namespace settings {
 void load() {
     Preferences p;
     p.begin(NVS_NS, true);
-    uint8_t os = p.getUChar("os", DEFAULT_TARGET_OS);
+    // Chave nova: instalações anteriores também passam a detectar ao conectar.
+    uint8_t os = p.getUChar("osmode", DEFAULT_TARGET_OS);
     uint8_t layout = p.getUChar("layout", DEFAULT_KB_LAYOUT);
-    s_cfg.os = os < (uint8_t)TargetOS::Count ? (TargetOS)os : TargetOS::Windows;
+    s_cfg.os = os < (uint8_t)TargetOS::Count ? (TargetOS)os : TargetOS::Auto;
     s_cfg.layout = layout < (uint8_t)KbLayout::Count ? (KbLayout)layout : KbLayout::US;
     s_cfg.ledLevel = p.getUChar("led", LED_DEFAULT_LEVEL);
     if (s_cfg.ledLevel < 1 || s_cfg.ledLevel > 5) s_cfg.ledLevel = LED_DEFAULT_LEVEL;
@@ -38,7 +39,7 @@ void load() {
 void save() {
     Preferences p;
     p.begin(NVS_NS, false);
-    p.putUChar("os", (uint8_t)s_cfg.os);
+    p.putUChar("osmode", (uint8_t)s_cfg.os);
     p.putUChar("layout", (uint8_t)s_cfg.layout);
     p.putUChar("led", s_cfg.ledLevel);
     p.putUChar("lxmode", s_cfg.linuxMode);
@@ -58,6 +59,7 @@ const char *osName(TargetOS os) {
         case TargetOS::Windows: return "Windows";
         case TargetOS::MacOS:   return "macOS";
         case TargetOS::Linux:   return "Linux";
+        case TargetOS::Auto:    return "Auto";
         default:                return "?";
     }
 }

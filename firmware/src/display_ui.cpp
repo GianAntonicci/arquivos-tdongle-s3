@@ -10,6 +10,7 @@
 #include <LovyanGFX.hpp>
 
 #include "config.h"
+#include "host_os.h"
 #include "led.h"
 #include "settings.h"
 
@@ -330,7 +331,7 @@ static void screenReady(const UiModel &m, uint32_t now) {
             c.drawString(buf, 3, 16);
             snprintf(buf, sizeof(buf), "Celulares: %u", m.stations);
             c.drawString(buf, 3, 26);
-            snprintf(buf, sizeof(buf), "SO: %s  Tecl: %s", osName(s.os), layoutName(s.layout));
+            snprintf(buf, sizeof(buf), "SO: %s  Tecl: %s", osName(host_os::effective()), layoutName(s.layout));
             c.drawString(buf, 3, 36);
             snprintf(buf, sizeof(buf), "RAM livre: %u KB",
                      (unsigned)(heap_caps_get_free_size(MALLOC_CAP_8BIT) / 1024));
@@ -445,7 +446,7 @@ static void screenHid(uint32_t now) {
     c.drawString(buf, 52, 30);
     c.setFont(&fonts::Font0);
     c.setTextColor(C_DIM);
-    snprintf(buf, sizeof(buf), "%s / %s", osName(s.os), layoutName(s.layout));
+    snprintf(buf, sizeof(buf), "%s / %s", osName(host_os::effective()), layoutName(s.layout));
     c.drawString(buf, 52, 56);
 }
 
@@ -461,9 +462,10 @@ static void screenMenu(const UiModel &m) {
     char items[(int)MenuItem::Count][24];
     snprintf(items[0], 24, "SO: %s", osName(s.os));
     snprintf(items[1], 24, "Teclado: %s", layoutName(s.layout));
-    snprintf(items[2], 24, "LED: %u/5", s.ledLevel);
-    snprintf(items[3], 24, "Info");
-    snprintf(items[4], 24, "Sair");
+    snprintf(items[2], 24, "Testar teclado");
+    snprintf(items[3], 24, "LED: %u/5", s.ledLevel);
+    snprintf(items[4], 24, "Info");
+    snprintf(items[5], 24, "Sair");
 
     // Janela de 3 itens que acompanha a seleção
     const int rows = 3;
@@ -636,9 +638,11 @@ BtnEvent nextButtonEvent() {
 
 void lock() { xSemaphoreTake(s_mutex, portMAX_DELAY); }
 
-void unlock() {
-    s_dirty = true;
-    s_lastActivity = millis();
+void unlock(bool changed) {
+    if (changed) {
+        s_dirty = true;
+        s_lastActivity = millis();
+    }
     xSemaphoreGive(s_mutex);
 }
 

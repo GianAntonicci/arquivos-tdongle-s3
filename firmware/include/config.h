@@ -7,7 +7,7 @@
 
 // ---------- Identidade ----------
 #define FW_NAME    "T-Dongle Bridge"
-#define FW_VERSION "0.1.0"
+#define FW_VERSION "0.2.2"
 
 // ---------- Wi-Fi (modo AP) ----------
 #define AP_SSID        "TDongle-Bridge"
@@ -29,7 +29,11 @@
 #define USB_PRODUCT       "T-Dongle Bridge"
 
 // ---------- HID (abrir o Chrome) ----------
-#define DEFAULT_TARGET_OS  0   // 0 = Windows, 1 = macOS, 2 = Linux
+// A URL é digitada sem "https://" e só com caracteres que ficam na mesma tecla
+// em US e ABNT2 (letras, números, espaço, . - _ / , < > ! @ # $ % & * ( ) = +).
+// Assim a sequência padrão funciona mesmo com o layout errado no menu; o layout
+// só importa para comandos personalizados com outros símbolos (: ; ? ' " [ ] ...).
+#define DEFAULT_TARGET_OS  3   // 0 = Windows, 1 = macOS, 2 = Linux, 3 = automático
 #define DEFAULT_KB_LAYOUT  1   // 0 = US, 1 = ABNT2
 
 // Linux: atalho do lançador + comando digitado. %URL% é substituído pela URL.
@@ -41,7 +45,8 @@
 #define HID_ENUM_DELAY_MS     2000  // espera após enumerar antes de digitar
 #define HID_KEY_DELAY_MS      12    // intervalo entre teclas
 #define HID_DIALOG_DELAY_MS   700   // espera a caixa Executar / Spotlight abrir
-#define HID_APP_OPEN_DELAY_MS 2500  // macOS: espera o Chrome abrir antes de Cmd+L
+#define HID_SPOTLIGHT_SEARCH_MS 1200 // macOS: espera o Spotlight mostrar o resultado antes do Enter
+#define HID_APP_OPEN_DELAY_MS 2500  // macOS: espera o Chrome abrir antes de Cmd+T
 
 // ---------- Pinos (confirmados em github.com/Xinyuan-LilyGO/T-Dongle-S3) ----------
 #define PIN_LCD_MOSI 3
@@ -86,6 +91,10 @@
 // nunca como texto solto na CDC.
 #ifndef DEBUG_LOG
 #define DEBUG_LOG 0
+#endif
+
+#ifndef BRIDGE_NULL_SINK
+#define BRIDGE_NULL_SINK 0
 #endif
 
 #ifndef UI_DEMO
