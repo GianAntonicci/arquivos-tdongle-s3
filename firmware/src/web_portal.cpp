@@ -9,10 +9,11 @@
 #include "config.h"
 #include "display_ui.h"
 #include "settings.h"
+#include "upload_handler.h"
 #include "usb_bridge.h"
 #include "web_portal_html.h"
 
-static WebServer       s_server(80);
+static PortalWebServer s_server(80);
 static DNSServer       s_dns;
 static const IPAddress AP_IP(AP_IP_BYTES);
 static const char     *AP_HOST = "192.168.4.1";
@@ -94,8 +95,8 @@ static void uploadFail(ErrorReason why) {
 static void uploadStart(const char *fallbackName) {
     memset(&s_up, 0, sizeof(s_up));
 
-    // Nome e tamanho vêm da query string (o WebServer já faz o URL-decode,
-    // então acentos chegam como UTF-8). Uma vez por arquivo: String aqui é ok.
+    // Argumentos já decodificados: cabeçalho no raw, query no multipart.
+    // Acentos chegam como UTF-8. Uma vez por arquivo: String aqui é ok.
     const String &qn = s_server.arg("name");
     const char *name = qn.length() ? qn.c_str() : (fallbackName ? fallbackName : "arquivo");
     strncpy(s_name, name, sizeof(s_name) - 1);
@@ -169,24 +170,32 @@ static void uploadAborted() {
     uploadFail(ErrorReason::WifiLost);
 }
 
-// Callback de corpo: cru (raw=1, usado pela página) ou multipart (curl -F)
-static void handleUploadStream() {
-    if (s_server.hasArg("raw")) {
-        HTTPRaw &r = s_server.raw();
-        switch (r.status) {
-            case RAW_START:   uploadStart(nullptr); break;
-            case RAW_WRITE:   uploadData(r.buf, r.currentSize); break;
-            case RAW_END:     uploadEnd(); break;
-            case RAW_ABORTED: uploadAborted(); break;
-        }
-    } else {
-        HTTPUpload &u = s_server.upload();
-        switch (u.status) {
-            case UPLOAD_FILE_START:   uploadStart(u.filename.c_str()); break;
-            case UPLOAD_FILE_WRITE:   uploadData(u.buf, u.currentSize); break;
-            case UPLOAD_FILE_END:     uploadEnd(); break;
-            case UPLOAD_FILE_ABORTED: uploadAborted(); break;
-        }
+static void handleRawUpload(HTTPRaw &r) {
+    switch (r.status) {
+        case RAW_START:
+            if (!s_server.prepareRawMetadata()) {
+                // Uma aba antiga pode estar sem o cabeçalho novo. Recusa sem
+                // acessar HTTPUpload e sem reutilizar argumentos de outro POST.
+                memset(&s_up, 0, sizeof(s_up));
+                s_up.err = ErrorReason::Aborted;
+                sendJson(400, "{\"ok\":false,\"code\":4,\"error\":\"Recarregue a pagina do celular e tente novamente\"}");
+                s_server.client().stop();
+                return;
+            }
+            uploadStart(nullptr);
+            break;
+        case RAW_WRITE:   uploadData(r.buf, r.currentSize); break;
+        case RAW_END:     uploadEnd(); break;
+        case RAW_ABORTED: uploadAborted(); break;
+    }
+}
+
+static void handleMultipartUpload(HTTPUpload &u) {
+    switch (u.status) {
+        case UPLOAD_FILE_START:   uploadStart(u.filename.c_str()); break;
+        case UPLOAD_FILE_WRITE:   uploadData(u.buf, u.currentSize); break;
+        case UPLOAD_FILE_END:     uploadEnd(); break;
+        case UPLOAD_FILE_ABORTED: uploadAborted(); break;
     }
 }
 
@@ -316,7 +325,9 @@ void begin() {
     s_server.on("/status", HTTP_GET, handleStatus);
     s_server.on("/api/config", HTTP_GET, handleConfigGet);
     s_server.on("/api/config", HTTP_POST, handleConfigPost);
-    s_server.on("/upload", HTTP_POST, handleUploadDone, handleUploadStream);
+    const char *uploadHeaders[] = {"X-Upload-Metadata"};
+    s_server.collectHeaders(uploadHeaders, 1);
+    s_server.addHandler(new BridgeUploadHandler(handleUploadDone, handleRawUpload, handleMultipartUpload));
     // Rotas explícitas também funcionam quando o teste usa o próprio IP.
     const char *probes[] = {
         "/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",

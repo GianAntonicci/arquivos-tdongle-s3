@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 // Página de envio: seleção múltipla, envio sequencial com progresso.
 // O arquivo vai como corpo cru (application/octet-stream) em POST /upload,
-// com nome/tamanho/índice na query string (URL-encoded, UTF-8).
+// com nome/tamanho/índice no cabeçalho X-Upload-Metadata (URL-encoded, UTF-8).
 // -----------------------------------------------------------------------------
 static const char PORTAL_HTML[] PROGMEM = R"HTML(<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
@@ -60,8 +60,10 @@ function setItem(it,cls,pct,txt){it.el.className=cls;it.el.querySelector('.bar i
 function totals(extra){const all=items.reduce((a,i)=>a+i.f.size,0),done=items.filter(i=>i.state=='ok').reduce((a,i)=>a+i.f.size,0)+extra;
 const n=items.filter(i=>i.state=='ok').length;$('tot').textContent=`${n} de ${items.length} enviados · ${fmt(done)} de ${fmt(all)}`;$('totbar').style.width=(all?done/all*100:0)+'%'}
 function send(it,idx,cnt){return new Promise(res=>{const x=new XMLHttpRequest();cur=x;const t0=performance.now();let lt=t0,lb=0,bps=0;
-x.open('POST','/upload?raw=1&name='+encodeURIComponent(it.f.name)+'&size='+it.f.size+'&index='+idx+'&count='+cnt);
+const metadata='name='+encodeURIComponent(it.f.name)+'&size='+it.f.size+'&index='+idx+'&count='+cnt;
+x.open('POST','/upload');
 x.setRequestHeader('Content-Type','application/octet-stream');
+x.setRequestHeader('X-Upload-Metadata',metadata);
 x.upload.onprogress=e=>{const now=performance.now();if(now-lt>=700){const v=(e.loaded-lb)/(now-lt)*1000;bps=bps?bps*.6+v*.4:v;lt=now;lb=e.loaded}
 const p=it.f.size?e.loaded/it.f.size*100:100;setItem(it,'',p,p>=100?'Confirmando no PC…':`${p.toFixed(1)}% · ${fmt(bps)}/s`);totals(e.loaded)};
 x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}const s=(performance.now()-t0)/1000;
