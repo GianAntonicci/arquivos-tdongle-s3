@@ -40,6 +40,11 @@ comando também dependem do ambiente gráfico e do nome do executável do Chrome
 
 ## Compilar e gravar
 
+Binários de produção e instruções estão na
+[Release v0.2.2](https://github.com/GianAntonicci/arquivos-tdongle-s3/releases/tag/v0.2.2).
+Confira `SHA256SUMS` antes de gravar; os offsets e a diferença entre imagem
+factory e atualização somente da aplicação estão no anexo `INSTRUCOES.md`.
+
 Execute de dentro de `firmware/`:
 
 ```sh
