@@ -1,6 +1,7 @@
 // T-Dongle Bridge — ponte Wi-Fi -> USB (nada é armazenado no dongle)
 #include <Arduino.h>
 
+#include "app.h"
 #include "app_state.h"
 #include "button.h"
 #include "config.h"
@@ -9,6 +10,7 @@
 #include "led.h"
 #include "settings.h"
 #include "usb_bridge.h"
+#include "web_portal.h"
 
 // Texto digitado por "Testar teclado" (ver README: validação do layout)
 static const char KB_TEST_TEXT[] =
@@ -51,9 +53,11 @@ static void setScreen(UiScreen sc, uint32_t holdMs = 0) {
 static void goIdle() { setScreen(s_hostAlive ? UiScreen::Ready : UiScreen::WaitingHost); }
 
 static UiScreen currentScreen() {
-    UiLock ui;
+    UiReadLock ui;
     return ui->screen;
 }
+
+static bool isIdleScreen(UiScreen sc) { return sc == UiScreen::Ready || sc == UiScreen::WaitingHost; }
 
 // ---------- Menu de configuração ----------
 static void openMenu() {
@@ -77,7 +81,7 @@ static void menuActivate() {
     Settings &s = settings::get();
     uint8_t idx;
     {
-        UiLock ui;
+        UiReadLock ui;
         idx = ui->menuIndex;
     }
     switch ((MenuItem)idx) {
@@ -123,7 +127,11 @@ static void menuActivate() {
 
 // Acompanha a sequência HID: mostra "Abrindo Chrome" enquanto digita
 static void updateHid(uint32_t now) {
-    if (usb_bridge::takeMountEvent() && !s_autoLaunched) {
+    if (!usb_bridge::mounted()) {
+        s_autoLaunched = false;
+        hid::cancel();
+    }
+    if (usb_bridge::takeMountEvent() && usb_bridge::mounted() && !s_autoLaunched) {
         s_autoLaunched = true;
         // Se a página já reconectou sozinha, o Chrome já está aberto
         if (!usb_bridge::hostAlive()) hid::requestLaunch(HID_ENUM_DELAY_MS);
@@ -255,6 +263,74 @@ static void handleButton(BtnEvent ev) {
 }
 
 // =============================================================================
+// Eventos vindos do portal e da ponte USB (app.h)
+// =============================================================================
+namespace app {
+
+void transferStarted(const char *name, uint64_t size, uint16_t index, uint16_t count) {
+    if (currentScreen() == UiScreen::Menu) {
+        settings::save();
+        button::setDoubleClickEnabled(true);
+    }
+    {
+        UiLock ui;
+        strncpy(ui->xfer.name, name, sizeof(ui->xfer.name) - 1);
+        ui->xfer.name[sizeof(ui->xfer.name) - 1] = '\0';
+        ui->xfer.total = size;
+        ui->xfer.done = 0;
+        ui->xfer.bytesPerSec = 0;
+        ui->xfer.index = index;
+        ui->xfer.count = count;
+        ui->error = ErrorReason::None;
+    }
+    setScreen(UiScreen::Transfer);
+}
+
+void transferProgress(uint64_t done, uint32_t bytesPerSec) {
+    UiLock ui;
+    ui->xfer.done = done;
+    ui->xfer.bytesPerSec = bytesPerSec;
+}
+
+void transferFinished(ErrorReason result) {
+    if (result == ErrorReason::None) {
+        setScreen(UiScreen::Success, UI_SUCCESS_MS);
+        return;
+    }
+    {
+        UiLock ui;
+        ui->error = result;
+    }
+    setScreen(UiScreen::Error, UI_ERROR_MS);
+}
+
+// Chamado pela task de eventos do Wi-Fi
+void stationsChanged(uint8_t count, bool joined) {
+    UiLock ui;
+    ui->stations = count;
+    if (ui->screen == UiScreen::Ready || ui->screen == UiScreen::WaitingHost) {
+        strncpy(ui->toast, joined ? "Celular conectado" : "Celular saiu", sizeof(ui->toast) - 1);
+        ui->toastUntil = millis() + UI_TOAST_MS;
+    }
+}
+
+}  // namespace app
+
+// Página do PC apareceu/sumiu (HELLO): troca Aguardando <-> Pronto
+static void updateHost() {
+    bool alive = usb_bridge::hostAlive();
+    if (alive == s_hostAlive) return;
+    s_hostAlive = alive;
+    {
+        UiLock ui;
+        ui->hostAlive = alive;
+    }
+    // A página já está aberta: não precisa digitar nada
+    if (alive && hid::state() == HidState::Waiting) hid::cancel();
+    if (isIdleScreen(currentScreen())) goIdle();
+}
+
+// =============================================================================
 
 void setup() {
     settings::load();
@@ -265,6 +341,7 @@ void setup() {
 
     hid::begin();      // registra o teclado antes de subir a USB
     usb_bridge::begin();
+    web_portal::begin();
 
     setScreen(UiScreen::Boot, 1500);
 }
@@ -283,10 +360,14 @@ void loop() {
     if (currentScreen() == UiScreen::Menu && now - s_menuLastInput > MENU_TIMEOUT_MS) closeMenu();
 
     updateHid(now);
+    updateHost();
+
+    usb_bridge::loop();
+    web_portal::loop();  // durante um upload, fica aqui dentro até terminar
 
 #if UI_DEMO
     demoTick();
 #endif
 
-    delay(5);
+    delay(2);
 }

@@ -2,7 +2,7 @@
 // Tipos compartilhados entre os módulos (UI, LED, HID, ponte USB).
 #include <stdint.h>
 
-enum class TargetOS : uint8_t { Windows = 0, MacOS, Linux, Count };
+enum class TargetOS : uint8_t { Windows = 0, MacOS, Linux, Auto, Count };
 enum class KbLayout : uint8_t { US = 0, ABNT2, Count };
 
 // Telas principais do display

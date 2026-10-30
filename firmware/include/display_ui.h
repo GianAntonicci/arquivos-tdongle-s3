@@ -14,7 +14,7 @@ void     begin();
 // Próximo evento do botão (o clique que só acorda o backlight é descartado)
 BtnEvent nextButtonEvent();
 void     lock();
-void     unlock();     // marca a tela para redesenho e conta como atividade
+void     unlock(bool changed = true);  // changed: redesenha e conta como atividade
 UiModel &model();      // acessar somente entre lock() e unlock()
 }
 
@@ -24,4 +24,13 @@ struct UiLock {
     UiLock(const UiLock &) = delete;
     UiLock &operator=(const UiLock &) = delete;
     UiModel *operator->() { return &display::model(); }
+};
+
+// Só leitura: não redesenha nem conta como atividade (não impede o backlight de apagar)
+struct UiReadLock {
+    UiReadLock() { display::lock(); }
+    ~UiReadLock() { display::unlock(false); }
+    UiReadLock(const UiReadLock &) = delete;
+    UiReadLock &operator=(const UiReadLock &) = delete;
+    const UiModel *operator->() { return &display::model(); }
 };
