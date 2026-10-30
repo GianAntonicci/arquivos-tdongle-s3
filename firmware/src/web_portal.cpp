@@ -197,9 +197,9 @@ static void handleUploadDone() {
         return;
     }
     ErrorReason e = s_up.err != ErrorReason::None ? s_up.err : ErrorReason::Aborted;
-    char buf[96];
+    char buf[192];
     snprintf(buf, sizeof(buf), "{\"ok\":false,\"code\":%u,\"error\":\"%s\"}", (unsigned)e,
-             e == ErrorReason::NoHost ? "Abra a pagina no PC" : errorText(e));
+             e == ErrorReason::NoHost ? "No PC, clique em Conectar e libere a pasta de destino" : errorText(e));
     sendJson(e == ErrorReason::NoHost ? 503 : 500, buf);
 }
 

@@ -7,7 +7,7 @@
 
 // ---------- Identidade ----------
 #define FW_NAME    "T-Dongle Bridge"
-#define FW_VERSION "0.1.0"
+#define FW_VERSION "0.2.2"
 
 // ---------- Wi-Fi (modo AP) ----------
 #define AP_SSID        "TDongle-Bridge"

@@ -3,8 +3,8 @@
 //
 // API de arquivo usada pelo portal Web. Tudo é streaming: nenhum byte de
 // arquivo fica guardado no dongle além do bloco em trânsito. writeChunk()
-// bloqueia até o PC confirmar (ACK); enquanto isso o portal não lê o socket,
-// e o TCP segura o celular (contrapressão natural).
+// espera crédito de ACK quando a janela enche; enquanto isso o portal não lê
+// o socket, e o TCP segura o celular (contrapressão natural).
 #include <stddef.h>
 #include <stdint.h>
 

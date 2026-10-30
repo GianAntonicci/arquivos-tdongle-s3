@@ -50,7 +50,7 @@ const $=i=>document.getElementById(i);let items=[],busy=false,cur=null,stopAll=f
 const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':n<1073741824?(n/1048576).toFixed(1)+' MB':(n/1073741824).toFixed(2)+' GB';
 async function status(){try{const r=await fetch('/status',{cache:'no-store'});return await r.json()}catch(e){return null}}
 function banner(s){const b=$('ban');if(!s){b.className='banner b-err';b.innerHTML='Sem contato com o dongle<small>Confira se o celular ainda está no Wi-Fi do dongle.</small>';return}
-host=s.host;if(s.host){b.className='banner b-ok';b.textContent='✓ PC pronto para receber'}else{b.className='banner b-wait';b.innerHTML='Abra a página no PC<small></small>';b.querySelector('small').textContent=s.url||''}}
+host=s.host;if(s.host){b.className='banner b-ok';b.textContent='✓ PC pronto para receber'}else{b.className='banner b-wait';b.innerHTML='Conecte o dongle na página do PC<small></small>';b.querySelector('small').textContent='Clique em Conectar, escolha T-Dongle Bridge e libere a pasta, se solicitado. '+(s.url||'')}}
 async function poll(){if(!busy)banner(await status());setTimeout(poll,2000)}poll();
 $('inp').onchange=e=>{if(busy)return;items=[...e.target.files].map(f=>({f,el:null,state:'wait'}));render();e.target.value=''};
 function render(){const ul=$('list');ul.innerHTML='';$('qcard').hidden=!items.length;
@@ -67,12 +67,12 @@ const p=it.f.size?e.loaded/it.f.size*100:100;setItem(it,'',p,p>=100?'Confirmando
 x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}const s=(performance.now()-t0)/1000;
 if(x.status==200&&j.ok)res({ok:true,txt:`✓ Salvo no PC · ${fmt(it.f.size)} em ${s.toFixed(1)} s (${fmt(it.f.size/Math.max(s,.001))}/s)`});
 else res({ok:false,txt:'✕ '+(j.error||('Erro HTTP '+x.status)),noHost:j.code==5})};
-x.onerror=async()=>{const st=await status();res({ok:false,txt:st&&!st.host?'✕ Abra a página no PC':'✕ Conexão interrompida',noHost:st&&!st.host})};
+x.onerror=async()=>{const st=await status();res({ok:false,txt:st&&!st.host?'✕ No PC, clique em Conectar e libere a pasta':'✕ Conexão interrompida',noHost:st&&!st.host})};
 x.onabort=()=>res({ok:false,txt:'✕ Cancelado'});x.send(it.f)})}
 $('go').onclick=async()=>{if(busy)return;busy=true;stopAll=false;$('go').disabled=true;$('stop').hidden=false;$('inp').disabled=true;
 const todo=items.filter(i=>i.state!='ok');let k=0;
 for(const it of todo){k++;if(stopAll)break;const st=await status();banner(st);
-if(!st||!st.host){setItem(it,'er',0,'✕ Abra a página no PC e toque em Enviar de novo');it.state='err';break}
+if(!st||!st.host){setItem(it,'er',0,'✕ No PC, clique em Conectar e libere a pasta. Depois tente de novo');it.state='err';break}
 setItem(it,'',0,'Enviando…');const r=await send(it,k,todo.length);cur=null;it.state=r.ok?'ok':'err';setItem(it,r.ok?'ok':'er',r.ok?100:0,r.txt);totals(0);if(r.noHost)break}
 busy=false;$('go').disabled=false;$('go').textContent=items.some(i=>i.state!='ok')?'Tentar de novo':'Enviar';$('stop').hidden=true;$('inp').disabled=false;banner(await status())};
 $('stop').onclick=()=>{stopAll=true;if(cur)cur.abort()};
