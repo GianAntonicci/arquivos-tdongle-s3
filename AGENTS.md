@@ -92,6 +92,28 @@ cd web && npm run build        # tsc --noEmit + vite build -> web/dist
 - **Git:** quem faz commit, push e deploy é o dono do repositório. **Agentes não
   devem commitar, dar push nem disparar deploy.**
 
+## Publicação de versões nas GitHub Releases
+
+**Toda nova versão do projeto deve ser publicada nas GitHub Releases do
+repositório.** A entrega de uma versão só está completa quando a Release
+correspondente estiver publicada.
+
+- Usar uma tag semântica `vX.Y.Z`, apontando para o commit exato da versão
+  validada e disponível no remoto. Nas versões do firmware, a tag deve
+  corresponder a `FW_VERSION` em `firmware/include/config.h`; a versão do
+  protocolo USB é independente e deve ser informada nas notas.
+- Escrever notas em português com funcionalidades, correções, mudanças de
+  compatibilidade, validações realizadas e limitações conhecidas.
+- Anexar os binários de produção gerados para a versão, incluindo
+  `firmware.bin` e `firmware.factory.bin`, com instruções de gravação e
+  identificação do hardware e do ambiente de compilação. Identificar
+  separadamente qualquer variante de debug, demonstração ou nullsink.
+- Registrar a tag, o commit, o link da Release e os resultados das validações
+  no histórico deste `AGENTS.md`, atualizando também o README quando necessário.
+- Se a publicação não puder ser concluída, registrar a pendência e o motivo;
+  não informar a versão como publicada. Esta regra não altera as restrições
+  de commit, push e deploy descritas acima.
+
 ## Hardware (confirmado no repositório oficial da LilyGO)
 
 | Função | GPIO |
@@ -308,3 +330,33 @@ Se a falha de acesso voltar, diagnosticar nesta ordem:
   automática do portal em diferentes celulares continuam sem validação física
   completa. As últimas alterações documentais permanecem locais, sem commit
   ou push.
+
+### 2026-10-30 — Regra de publicação de versões nas Releases
+
+- **Trabalho:** adicionada ao `AGENTS.md` a obrigação de publicar cada nova
+  versão nas GitHub Releases, com tag semântica, commit de referência, notas
+  em português, binários e instruções de gravação. Definido o registro do link
+  e das validações no histórico.
+- **Validação:** revisão da consistência com as regras Git existentes e
+  `git diff --check` sem problemas. Não houve compilação porque a alteração
+  é exclusivamente documental.
+- **Resultado:** regra documentada. Nenhuma Release foi criada nesta tarefa,
+  cujo escopo foi adicionar a regra.
+
+### 2026-10-30 — Publicação da versão 0.2.2 e regra de Releases
+
+- **Trabalho preparado:** publicação da regra de Releases em `dev`, PR de
+  `dev` para `main` e pacote de produção `v0.2.2`. A `main` já contém o firmware
+  pelo PR #2; a Release usará o commit fonte
+  `836f9c92747d189742f4dae37ffc044cd8046821`.
+- **Artefatos:** `firmware.bin`, `firmware.factory.bin`, `INSTRUCOES.md`,
+  `BUILD_INFO.json` e `SHA256SUMS`. O pacote identifica ambiente `tdongle`,
+  ESP32-S3, flash de 16 MB sem PSRAM e protocolo USB v1.
+- **Validação:** código de `firmware/`, `web/` e workflow idêntico ao commit
+  fonte; imagens ESP32-S3 com checksum/hash válidos; aplicação da imagem
+  factory idêntica ao binário individual; checksums SHA-256 do pacote
+  conferidos. Reutilizadas as compilações, testes e validação física do JPEG
+  já registrados; não houve mudança de código que exigisse nova compilação.
+- **Publicação:** pendente de commit/push, criação do PR e publicação da
+  Release. O resultado e os links serão atualizados neste mesmo registro ao
+  concluir a operação.
