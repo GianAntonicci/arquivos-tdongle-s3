@@ -3,12 +3,11 @@
 #include <DNSServer.h>
 #include <WebServer.h>
 #include <WiFi.h>
-#include <dhcpserver/dhcpserver.h>
-#include <esp_netif.h>
 #include <esp_wifi.h>
 
 #include "app.h"
 #include "config.h"
+#include "display_ui.h"
 #include "settings.h"
 #include "usb_bridge.h"
 #include "web_portal_html.h"
@@ -17,6 +16,8 @@ static WebServer       s_server(80);
 static DNSServer       s_dns;
 static const IPAddress AP_IP(AP_IP_BYTES);
 static const char     *AP_HOST = "192.168.4.1";
+static const char     *PORTAL_URL = "http://192.168.4.1/";
+static bool            s_ready = false;
 
 // ---------- Estado do upload em andamento ----------
 // Sem String no caminho de dados: só buffers estáticos e contadores.
@@ -63,14 +64,18 @@ static void sendJson(int code, const char *json) {
     s_server.send(code, "application/json", json);
 }
 
-// Requisições para outros domínios (testes de conectividade do Android/iOS/
-// Windows) são redirecionadas para o portal: é isso que faz o celular abrir
-// a página sozinho ao conectar.
+// Os testes HTTP recebem um redirecionamento, nunca a resposta de "internet
+// disponível" (204/Success). O celular decide quando mostrar a janela de login.
+static void redirectToPortal() {
+    s_server.sendHeader("Cache-Control", "no-store");
+    s_server.sendHeader("Location", PORTAL_URL, true);
+    s_server.send(302, "text/plain; charset=utf-8", "Abra http://192.168.4.1/");
+}
+
 static bool captiveRedirect() {
-    String host = s_server.hostHeader();
-    if (host.length() == 0 || host == AP_HOST) return false;
-    s_server.sendHeader("Location", String("http://") + AP_HOST + "/", true);
-    s_server.send(302, "text/plain", "");
+    const String &host = s_server.hostHeader();
+    if (host.length() == 0 || host == AP_HOST || host == "192.168.4.1:80") return false;
+    redirectToPortal();
     return true;
 }
 
@@ -258,8 +263,14 @@ static void handleConfigPost() {
 }
 
 static void handleNotFound() {
-    if (captiveRedirect()) return;
-    s_server.send(404, "text/plain", "404");
+    // Inclui testes de conectividade desconhecidos, mesmo com Host numérico.
+    redirectToPortal();
+}
+
+static void startupError(const char *message) {
+    UiLock ui;
+    snprintf(ui->toast, sizeof(ui->toast), "%s", message);
+    ui->toastUntil = millis() + 15000;
 }
 
 // Celular entrou/saiu do AP
@@ -273,33 +284,32 @@ static void onWifiEvent(arduino_event_id_t event, arduino_event_info_t) {
 namespace web_portal {
 
 void begin() {
-    WiFi.mode(WIFI_AP);
     WiFi.onEvent(onWifiEvent);
-    WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, 0, AP_MAX_CLIENTS);
+    // AP.begin() cria a interface sem divulgar o SSID do projeto. Só liberamos
+    // a associação depois de configurar o endereço, DHCP e os serviços locais.
+    if (!WiFi.AP.begin()) {
+        startupError("Erro ao iniciar Wi-Fi");
+        return;
+    }
     // O 5º parâmetro (DNS) é obrigatório para o captive portal: no core 3.x o
     // DHCP só anuncia um servidor DNS aos clientes se ele for informado aqui.
     // Sem isso o celular não usa o nosso DNSServer e a página não abre sozinha.
-    WiFi.softAPConfig(AP_IP, AP_IP, IPAddress(255, 255, 255, 0), IPAddress(192, 168, 4, 2), AP_IP);
-
-    // DHCP opção 114 (RFC 8910): Android 11+ e iOS 14+ abrem o portal direto
-    // por ela, sem depender do teste de conectividade. O ponteiro precisa
-    // continuar válido (o esp_netif não copia a string).
-    static char portalUri[] = "http://192.168.4.1/";
-    esp_netif_t *ap = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
-    if (ap) {
-        esp_netif_dhcps_stop(ap);
-        // reaplica o anúncio de DNS junto, para não depender do que o stop preserva
-        dhcps_offer_t offerDns = OFFER_DNS;
-        esp_netif_dhcps_option(ap, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offerDns, sizeof(offerDns));
-        esp_netif_dhcps_option(ap, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI, portalUri, strlen(portalUri));
-        esp_netif_dhcps_start(ap);
+    if (!WiFi.softAPConfig(AP_IP, AP_IP, IPAddress(255, 255, 255, 0), IPAddress(192, 168, 4, 2), AP_IP)) {
+        startupError("Erro no IP/DHCP do Wi-Fi");
+        return;
     }
-    WiFi.setSleep(false);              // sem economia de energia: mais vazão
-    esp_wifi_set_ps(WIFI_PS_NONE);
+
+    // Não anuncia opção 114: ela exige uma API CAPPORT HTTPS, não a página
+    // HTML HTTP. Sem essa API usamos os testes HTTP tradicionais dos celulares.
+    // Também evita parar/reiniciar o DHCP de novo com clientes já conectando.
 
     // DNS responde o IP do dongle para qualquer domínio (captive portal)
     s_dns.setErrorReplyCode(DNSReplyCode::NoError);
-    s_dns.start(53, "*", AP_IP);
+    s_dns.setTTL(0);  // não deixa o IP do portal no cache após sair desta rede
+    if (!s_dns.start(53, "*", AP_IP)) {
+        startupError("Erro no DNS do portal");
+        return;
+    }
 
     s_server.on("/", HTTP_GET, handleRoot);
     s_server.on("/config", HTTP_GET, handleConfigPage);
@@ -307,11 +317,28 @@ void begin() {
     s_server.on("/api/config", HTTP_GET, handleConfigGet);
     s_server.on("/api/config", HTTP_POST, handleConfigPost);
     s_server.on("/upload", HTTP_POST, handleUploadDone, handleUploadStream);
+    // Rotas explícitas também funcionam quando o teste usa o próprio IP.
+    const char *probes[] = {
+        "/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
+        "/connecttest.txt", "/ncsi.txt", "/redirect", "/canonical.html", "/success.txt"
+    };
+    for (const char *path : probes) s_server.on(path, HTTP_ANY, redirectToPortal);
     s_server.onNotFound(handleNotFound);
     s_server.begin();
+
+    if (!WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, 0, AP_MAX_CLIENTS) || WiFi.softAPIP() != AP_IP) {
+        s_server.stop();
+        s_dns.stop();
+        startupError("Erro ao criar rede Wi-Fi");
+        return;
+    }
+    WiFi.setSleep(false);              // sem economia de energia: mais vazão
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    s_ready = true;
 }
 
 void loop() {
+    if (!s_ready) return;
     s_dns.processNextRequest();
     s_server.handleClient();
 }
