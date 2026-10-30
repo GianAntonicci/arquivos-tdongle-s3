@@ -32,7 +32,7 @@ enum class ErrorReason : uint8_t {
 };
 
 // Itens do menu de configuração
-enum class MenuItem : uint8_t { Os = 0, Layout, Led, Info, Exit, Count };
+enum class MenuItem : uint8_t { Os = 0, Layout, KbTest, Led, Info, Exit, Count };
 
 struct TransferView {
     char     name[96];     // nome do arquivo (UTF-8)

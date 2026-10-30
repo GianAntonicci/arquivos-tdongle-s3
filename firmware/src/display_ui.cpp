@@ -461,9 +461,10 @@ static void screenMenu(const UiModel &m) {
     char items[(int)MenuItem::Count][24];
     snprintf(items[0], 24, "SO: %s", osName(s.os));
     snprintf(items[1], 24, "Teclado: %s", layoutName(s.layout));
-    snprintf(items[2], 24, "LED: %u/5", s.ledLevel);
-    snprintf(items[3], 24, "Info");
-    snprintf(items[4], 24, "Sair");
+    snprintf(items[2], 24, "Testar teclado");
+    snprintf(items[3], 24, "LED: %u/5", s.ledLevel);
+    snprintf(items[4], 24, "Info");
+    snprintf(items[5], 24, "Sair");
 
     // Janela de 3 itens que acompanha a seleção
     const int rows = 3;

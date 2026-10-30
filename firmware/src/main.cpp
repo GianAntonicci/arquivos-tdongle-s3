@@ -5,13 +5,21 @@
 #include "button.h"
 #include "config.h"
 #include "display_ui.h"
+#include "hid_launcher.h"
 #include "led.h"
 #include "settings.h"
+#include "usb_bridge.h"
+
+// Texto digitado por "Testar teclado" (ver README: validação do layout)
+static const char KB_TEST_TEXT[] =
+    "abc XYZ 0123456789 !@#$%&*()-_=+ []{}\\| ;:'\",.<>/? ~^` https://a.b/c?d=e_f";
 
 // ---------- Estado do app ----------
 static bool     s_hostAlive = false;
 static uint32_t s_screenUntil = 0;   // telas temporárias (sucesso/erro/HID)
 static uint32_t s_menuLastInput = 0;
+static bool     s_autoLaunched = false;  // HID automático: uma vez por plug
+static bool     s_hidShown = false;      // tela "Abrindo Chrome" ativa
 static const uint32_t MENU_TIMEOUT_MS = 20000;
 
 // Troca de tela e ajusta o LED correspondente
@@ -79,6 +87,11 @@ static void menuActivate() {
         case MenuItem::Layout:
             s.layout = (KbLayout)(((uint8_t)s.layout + 1) % (uint8_t)KbLayout::Count);
             break;
+        case MenuItem::KbTest:
+            // Abra um editor de texto no PC antes: o texto é digitado onde estiver o foco
+            closeMenu();
+            hid::requestType(KB_TEST_TEXT);
+            return;
         case MenuItem::Led:
             s.ledLevel = s.ledLevel % 5 + 1;
             led::setLevel(s.ledLevel);
@@ -98,13 +111,33 @@ static void menuActivate() {
             closeMenu();
             return;
     }
-    UiLock ui;  // redesenha com o novo valor
+    settings::save();  // salva na hora: desplugar dentro do menu não perde a troca
+    UiLock ui;         // redesenha com o novo valor
 }
 
 // ---------- Ações do botão ----------
-static void launchChrome() {
-    // Etapa (b): sequência HID real. Por ora só a indicação visual.
-    setScreen(UiScreen::HidRunning, 1500);
+[[maybe_unused]] static void launchChrome() {  // no modo demo o clique curto é da demo
+    if (!usb_bridge::mounted()) return;  // ligado num carregador: não há PC
+    hid::requestLaunch(0);
+}
+
+// Acompanha a sequência HID: mostra "Abrindo Chrome" enquanto digita
+static void updateHid(uint32_t now) {
+    if (usb_bridge::takeMountEvent() && !s_autoLaunched) {
+        s_autoLaunched = true;
+        // Se a página já reconectou sozinha, o Chrome já está aberto
+        if (!usb_bridge::hostAlive()) hid::requestLaunch(HID_ENUM_DELAY_MS);
+    }
+    hid::tick(now);
+
+    bool running = hid::state() == HidState::Running;
+    if (running && !s_hidShown) {
+        s_hidShown = true;
+        setScreen(UiScreen::HidRunning);
+    } else if (!running && s_hidShown && hid::state() == HidState::Idle) {
+        s_hidShown = false;
+        goIdle();
+    }
 }
 
 static void nextInfoPage() {
@@ -230,6 +263,9 @@ void setup() {
     button::begin();
     display::begin();  // tela de boot + task de UI
 
+    hid::begin();      // registra o teclado antes de subir a USB
+    usb_bridge::begin();
+
     setScreen(UiScreen::Boot, 1500);
 }
 
@@ -245,6 +281,8 @@ void loop() {
     }
 
     if (currentScreen() == UiScreen::Menu && now - s_menuLastInput > MENU_TIMEOUT_MS) closeMenu();
+
+    updateHid(now);
 
 #if UI_DEMO
     demoTick();
