@@ -4,6 +4,10 @@ Ponte de arquivos do celular para o PC usando Wi-Fi no LilyGO T-Dongle S3,
 USB CDC e uma página Web Serial no Chrome. Os arquivos passam pela RAM;
 nunca são gravados na flash nem no cartão SD do dongle.
 
+Estado atual: firmware **0.2.2**, protocolo USB **v1**. Um JPEG de 4,14 MB foi
+recebido no hardware com tamanho/CRC válidos e download concluído no Chrome.
+Arquivos grandes, lotes e quedas de conexão ainda precisam de validação física.
+
 ## Sistema operacional automático
 
 Ao conectar ao computador, o firmware observa os tamanhos das requisições USB
@@ -44,6 +48,10 @@ pio run -t upload
 ```
 
 Se a gravação falhar, segure BOOT ao conectar o dongle e tente novamente.
+Feche a aba Web Serial e outros programas que estejam usando a porta antes
+de gravar. No macOS, a porta pode mudar ao entrar no bootloader; se aparecer
+`Device not configured`, rode `pio device list` e repita a gravação com
+`pio run -t upload --upload-port <porta-atual>`.
 
 Para testar a classificação das sequências USB no computador:
 
@@ -62,6 +70,7 @@ ausência de teclas. Compilar não comprova a identificação em um computador r
 Execute de dentro de `web/`:
 
 ```sh
+npm ci
 npm run dev
 npm run typecheck
 npm run build
@@ -77,7 +86,7 @@ prefira pasta para arquivos grandes. Mantenha a aba aberta durante o envio.
 Sem confirmação do firmware, conferir se outra aba ou monitor serial ocupa a porta.
 No Linux, conferir também a permissão de acesso à porta (grupo `dialout`).
 
-Com o firmware 0.2.0, a página recebe `HELLO_ACK` e exibe a versão do firmware,
+Desde o firmware 0.2.0, a página recebe `HELLO_ACK` e exibe a versão do firmware,
 protocolo e janela. No celular deve aparecer **PC pronto para receber** antes
 do envio. A página já publicada usa o mesmo protocolo v1; não exige novo deploy.
 
@@ -94,6 +103,21 @@ Os testes simulam FIFO cheio, escritas parciais e um arquivo de 4.336.521 bytes.
 No hardware, o mesmo JPEG que falhava concluiu com tamanho/CRC válidos: 4.336.521
 bytes em 1min12s, média 58,9 KB/s, download confirmado no Chrome. Isso valida
 esse envio; arquivos grandes, lotes e quedas de conexão ainda precisam de testes.
+
+## Testar o layout do teclado
+
+Abra um editor de texto no PC e deixe o cursor no documento. No dongle, segure
+BOOT para abrir o menu, navegue com cliques curtos e segure para ativar
+**Testar teclado**. O texto esperado, definido em `KB_TEST_TEXT` no `main.cpp`, é:
+
+```text
+abc XYZ 0123456789 !@#$%&*()-_=+ []{}\| ;:'",.<>/? ~^` https://a.b/c?d=e_f
+```
+
+Se os símbolos saírem diferentes, selecione US ou ABNT2 no menu do dongle ou
+no portal `/config`, conforme o layout ativo no PC. A detecção de SO não detecta
+o layout. No macOS, conclua o Assistente de Configuração de Teclado, caso apareça,
+antes de repetir o teste ou a abertura do Chrome.
 
 ## Portal no celular
 
@@ -189,5 +213,6 @@ node ../firmware/test/check_web_protocol.cjs /tmp/tdongle-protocol-js/protocol.j
 ```
 
 Os testes simulam CDC com escritas parciais, crédito, ACK duplicado/cumulativo,
-recusa, timeout e desconexão. Ainda é preciso validar a transferência física,
-inclusive arquivos grandes e quedas de Wi-Fi/USB. Demais etapas em [AGENTS.md](AGENTS.md).
+recusa, timeout e desconexão. Além do JPEG já confirmado no hardware, ainda
+faltam testes físicos com arquivos grandes, lotes, nomes variados e quedas de
+Wi-Fi/USB. Demais etapas em [AGENTS.md](AGENTS.md).
