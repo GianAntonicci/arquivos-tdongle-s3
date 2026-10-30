@@ -1,0 +1,19 @@
+{
+  "name": "tdongle-bridge-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Página Web Serial do T-Dongle Bridge: recebe arquivos do dongle e grava no disco do PC",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/w3c-web-serial": "^1.0.9",
+    "@types/wicg-file-system-access": "^2023.10.7",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5"
+  }
+}

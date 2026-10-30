@@ -17,8 +17,8 @@
 #define AP_IP_BYTES    192, 168, 4, 1
 
 // ---------- Página Web Serial no PC (GitHub Pages) ----------
-// Troque SEU_USUARIO pelo seu usuário do GitHub (ou altere pelo portal).
-#define DEFAULT_PC_URL "https://SEU_USUARIO.github.io/arq_tdongle/"
+// Pode ser alterada em campo pelo portal do celular (fica salva em NVS).
+#define DEFAULT_PC_URL "https://gianantonicci.github.io/arquivos-tdongle-s3/"
 
 // ---------- USB ----------
 // VID/PID registrados para o T-Dongle S3 (boards/dongles3.json da LilyGO).

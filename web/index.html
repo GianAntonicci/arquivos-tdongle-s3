@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>T-Dongle Bridge</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2322d3ee'/%3E%3Cpath d='M9 12h12l-4-4M23 20H11l4 4' stroke='%23071016' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">⇄</span>
+        <div>
+          <h1>T-Dongle Bridge</h1>
+          <p class="tagline">Celular → Wi-Fi → dongle → USB → esta pasta</p>
+        </div>
+      </div>
+      <span id="link-pill" class="pill pill-off">Desconectado</span>
+    </header>
+
+    <main>
+      <section id="unsupported" class="card card-warn" hidden>
+        <h2>Navegador sem Web Serial</h2>
+        <p>Abra esta página no <b>Google Chrome</b> (ou Edge) no computador. Celulares e Firefox/Safari não têm Web Serial.</p>
+      </section>
+
+      <div class="grid">
+        <section class="card" id="card-dongle">
+          <h2>Dongle</h2>
+          <p id="dongle-status" class="status-line">Procurando dongle…</p>
+          <p id="dongle-info" class="muted"></p>
+          <div class="row">
+            <button id="btn-connect" type="button" class="primary">Conectar dongle</button>
+          </div>
+        </section>
+
+        <section class="card" id="card-dest">
+          <h2>Pasta de destino</h2>
+          <p id="dest-status" class="status-line"></p>
+          <button id="btn-unlock" type="button" class="primary big" hidden>
+            🔓 Clique para liberar o acesso à pasta
+          </button>
+          <div class="row">
+            <button id="btn-choose" type="button">Escolher pasta</button>
+            <button id="btn-forget" type="button" class="ghost" hidden>Usar Downloads</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Transferências</h2>
+          <span id="totals" class="muted"></span>
+          <button id="btn-clear" type="button" class="ghost small">Limpar</button>
+        </div>
+        <ul id="xfers" class="xfers"></ul>
+        <p id="xfers-empty" class="muted empty">
+          Nenhuma transferência ainda. Conecte o celular ao Wi-Fi <b>TDongle-Bridge</b> e envie arquivos pela página que abre.
+        </p>
+      </section>
+
+      <details class="card" id="log-card">
+        <summary>Log</summary>
+        <pre id="log"></pre>
+      </details>
+
+      <section class="card help">
+        <h2>Como usar</h2>
+        <ol>
+          <li>Plugue o dongle. Na primeira vez, clique em <b>Conectar dongle</b> e escolha <i>T-Dongle Bridge</i>; depois ele reconecta sozinho.</li>
+          <li>Escolha a pasta onde os arquivos serão salvos (sem pasta, eles vão para Downloads).</li>
+          <li>No celular, conecte ao Wi-Fi mostrado no display do dongle. A página de envio abre sozinha (ou acesse <b>192.168.4.1</b>).</li>
+          <li>Deixe esta aba aberta durante as transferências. Nada fica guardado no dongle.</li>
+        </ol>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
