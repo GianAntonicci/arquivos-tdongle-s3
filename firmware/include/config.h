@@ -92,6 +92,10 @@
 #define DEBUG_LOG 0
 #endif
 
+#ifndef BRIDGE_NULL_SINK
+#define BRIDGE_NULL_SINK 0
+#endif
+
 #ifndef UI_DEMO
 #define UI_DEMO 0
 #endif

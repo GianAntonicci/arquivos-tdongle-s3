@@ -637,9 +637,11 @@ BtnEvent nextButtonEvent() {
 
 void lock() { xSemaphoreTake(s_mutex, portMAX_DELAY); }
 
-void unlock() {
-    s_dirty = true;
-    s_lastActivity = millis();
+void unlock(bool changed) {
+    if (changed) {
+        s_dirty = true;
+        s_lastActivity = millis();
+    }
     xSemaphoreGive(s_mutex);
 }
 

@@ -53,6 +53,23 @@ bool takeMountEvent() {
     return true;
 }
 
-bool hostAlive() { return false; }  // etapa (d): HELLO do protocolo
+void loop() {}  // etapa (d): HELLO/ACK do protocolo
+
+// ---------------------------------------------------------------------------
+// Etapa (c): stubs. Com BRIDGE_NULL_SINK=1 os dados são aceitos e descartados,
+// para medir a velocidade do Wi-Fi sem o PC. Etapa (d) troca pelo protocolo.
+// ---------------------------------------------------------------------------
+#if BRIDGE_NULL_SINK
+bool hostAlive() { return true; }
+ErrorReason beginFile(const char *, uint64_t, uint16_t, uint16_t) { return ErrorReason::None; }
+ErrorReason writeChunk(const uint8_t *, size_t) { return ErrorReason::None; }
+ErrorReason endFile() { return ErrorReason::None; }
+#else
+bool hostAlive() { return false; }
+ErrorReason beginFile(const char *, uint64_t, uint16_t, uint16_t) { return ErrorReason::NoHost; }
+ErrorReason writeChunk(const uint8_t *, size_t) { return ErrorReason::NoHost; }
+ErrorReason endFile() { return ErrorReason::NoHost; }
+#endif
+void abortFile(ErrorReason) {}
 
 }  // namespace usb_bridge
