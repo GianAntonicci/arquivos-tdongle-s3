@@ -345,9 +345,9 @@ Se a falha de acesso voltar, diagnosticar nesta ordem:
 
 ### 2026-10-30 — Publicação da versão 0.2.2 e regra de Releases
 
-- **Trabalho preparado:** publicação da regra de Releases em `dev`, PR de
-  `dev` para `main` e pacote de produção `v0.2.2`. A `main` já contém o firmware
-  pelo PR #2; a Release usará o commit fonte
+- **Trabalho concluído:** regra de Releases publicada em `dev`, PR de
+  `dev` para `main` aberto e pacote de produção `v0.2.2` publicado. A `main`
+  já continha o firmware pelo PR #2; a tag referencia o commit fonte
   `836f9c92747d189742f4dae37ffc044cd8046821`.
 - **Artefatos:** `firmware.bin`, `firmware.factory.bin`, `INSTRUCOES.md`,
   `BUILD_INFO.json` e `SHA256SUMS`. O pacote identifica ambiente `tdongle`,
@@ -357,6 +357,9 @@ Se a falha de acesso voltar, diagnosticar nesta ordem:
   factory idêntica ao binário individual; checksums SHA-256 do pacote
   conferidos. Reutilizadas as compilações, testes e validação física do JPEG
   já registrados; não houve mudança de código que exigisse nova compilação.
-- **Publicação:** pendente de commit/push, criação do PR e publicação da
-  Release. O resultado e os links serão atualizados neste mesmo registro ao
-  concluir a operação.
+- **Release publicada:** [v0.2.2](https://github.com/GianAntonicci/arquivos-tdongle-s3/releases/tag/v0.2.2), com os cinco anexos
+  conferidos após o upload (estado, tamanho e SHA-256).
+- **Pull request:** [#3](https://github.com/GianAntonicci/arquivos-tdongle-s3/pull/3), de `dev` para `main`.
+  A publicação da Release não fez merge do PR nem disparou deploy manual.
+- **Pendências:** permanecem os testes físicos de arquivos grandes, lotes e
+  falhas de conexão, além da otimização da vazão USB.
